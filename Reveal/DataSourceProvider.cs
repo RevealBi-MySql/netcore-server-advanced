@@ -1,4 +1,5 @@
-﻿using Microsoft.SqlServer.TransactSql.ScriptDom;
+﻿using DocumentFormat.OpenXml.Drawing.Diagrams;
+using Microsoft.SqlServer.TransactSql.ScriptDom;
 using Reveal.Sdk;
 using Reveal.Sdk.Data;
 using Reveal.Sdk.Data.MySql;
@@ -53,96 +54,65 @@ namespace RevealSdk.Server.Reveal
             return Task.FromResult(dataSource);
         }
 
-        public Task<RVDataSourceItem>? ChangeDataSourceItemAsync(IRVUserContext userContext, string dashboardId, RVDataSourceItem dataSourceItem)
+        public async Task<RVDataSourceItem> ChangeDataSourceItemAsync(IRVUserContext userContext, string dashboardId, RVDataSourceItem dataSourceItem)
         {
+            if (dataSourceItem is not RVMySqlDataSourceItem sqlDsi) return dataSourceItem;
+
+            // Update the data source
+            await ChangeDataSourceAsync(userContext, sqlDsi.DataSource).ConfigureAwait(false);
+
             // ****
-            // Every request for data passes thru changeDataSourceItem
-            // You can set query properties based on the incoming requests
+            // Check the UserContextProvider to see how "Role" is being created
             // ****
-
-            if (dataSourceItem is not RVMySqlDataSourceItem sqlDsi) return Task.FromResult(dataSourceItem);
-
-            // Ensure data source is updated
-            ChangeDataSourceAsync(userContext, sqlDsi.DataSource);
-
-            string customerId = userContext.UserId;
-            string orderId = userContext.Properties["OrderId"]?.ToString();
             bool isAdmin = userContext.Properties["Role"]?.ToString() == "Admin";
 
+            // I am pulling in a list of tables that a user is allowed to see.
+            // when looking at the DataSources dialog, I only want the 'USER' role to 
+            // see specific tables
             var allowedTables = TableInfo.GetAllowedTables()
-                             .Where(t => string.Equals(t.COLUMN_NAME, "CustomerID", StringComparison.OrdinalIgnoreCase))
-                             .Select(t => t.TABLE_NAME)
-                             .ToList();
+                                 .Where(t => t.COLUMN_NAME.Equals("customer_id", StringComparison.OrdinalIgnoreCase))
+                                 .Select(t => t.TABLE_NAME)
+                                 .ToHashSet(); 
+
+            // store the userContext.UserId in a customerId variable
+            int? customerId = GetValidCustomerId(userContext.UserId);
 
             switch (sqlDsi.Id)
             {
-                // *****
-                // Example of how to use a stored procedure with a parameter
-                // *****
-                case "CustOrderHist":
-                case "CustOrdersOrders":
-                    if (!IsValidCustomerId(customerId))
-                        throw new ArgumentException("Invalid CustomerID format. CustomerID must be a 5-character alphanumeric string.");
+                // ****
+                // Example of an ad-hoc query with a customerId parameter from the userContext
+                // ****
+                case "sp_customer_orders":
                     sqlDsi.Procedure = sqlDsi.Id;
-                    sqlDsi.ProcedureParameters = new Dictionary<string, object> { { "@CustomerID", customerId } };
+                    sqlDsi.ProcedureParameters = new Dictionary<string, object> { { "customer", customerId ?? throw InvalidCustomerIdException() } };
                     break;
-
-                // *****
-                // Example of how to use a stored procedure 
-                // *****
-                case "TenMostExpensiveProducts":
-                    sqlDsi.Procedure = "Ten Most Expensive Products";
+                // ****
+                // Example of an ad-hoc query with a customerId parameter from the userContext
+                // ****
+                case "customer_orders":
+                    sqlDsi.CustomQuery = GenerateSelectQuery(sqlDsi.Id, "customer_id", customerId);
                     break;
-
-                // *****
-                // Example of an ad-hoc-query
-                // *****
-                case "CustomerOrders":
-                    if (!IsValidOrderId(orderId))
-                        throw new ArgumentException("Invalid OrderId format. OrderId must be a 5-digit numeric value.");
-
-                    orderId = EscapeSqlInput(orderId);
-                    string customQuery = $"SELECT * FROM Orders WHERE OrderId = '{orderId}'";
-                    if (!IsSelectOnly(customQuery)) 
-                        throw new ArgumentException("Invalid SQL query.");
-                    sqlDsi.CustomQuery = customQuery;
-
+                // ****
+                // Example of a parameterized stored procedure with a orderId parameter from the userContext
+                // ****
+                case "customer_orders_details":
+                    string orderId = GetValidOrderId(userContext.Properties["OrderId"]?.ToString());
+                    sqlDsi.CustomQuery = GenerateSelectQuery(sqlDsi.Id, "order_id", orderId);
                     break;
-
-                    // *****
-                    // Example pulling in the list of allowed tables that have the customerId column name
-                    // this ensures that _any_ time a request is made for customer specific data in allowed tables
-                    // the customerId parameter is passed
-                    // note that the Admin role is not restricted to a custom query, the Admin role will see all 
-                    // customer data with no restriction
-                    // the tables being checked are in the allowedtables.json
-                    // *****
-                 case var table when allowedTables.Contains(sqlDsi.Table):
-                    if (isAdmin)
-                        break;
-
-                    if (!IsValidCustomerId(customerId))
-                        throw new ArgumentException("Invalid CustomerID format. CustomerID must be a 5-character alphanumeric string.");
-
-                    customerId = EscapeSqlInput(customerId);
-                    string query = $"SELECT * FROM [{sqlDsi.Table}] WHERE customerId = '{customerId}'";
-                    if (!IsSelectOnly(query))
-                        throw new ArgumentException("Invalid SQL query.");
-
-                    sqlDsi.CustomQuery = query;
-                    break;
-
+                // ****
+                // This assumes the Data Sources Dialog table / object is selected
+                // ****
                 default:
-                    // ****
-                    // If you do not want to allow any other tables,throw an exception
-                    // ****
-                    //throw new ArgumentException("Invalid Table");
-                    //return null;
+                    if (allowedTables.Contains(sqlDsi.Table) && !isAdmin)
+                    {
+                        sqlDsi.CustomQuery = GenerateSelectQuery(sqlDsi.Table, "customer_id", customerId);
+                    }
                     break;
             }
 
-            return Task.FromResult(dataSourceItem);
+            return dataSourceItem;
         }
+
 
         // ****
         // Modify any of the code below to meet your specific needs
@@ -151,11 +121,47 @@ namespace RevealSdk.Server.Reveal
         // and ensuring that no invalid / illegal statements are passed in the header to the custom query
         // ****
 
-        private static bool IsValidCustomerId(string customerId) => Regex.IsMatch(customerId, @"^[A-Za-z0-9]{5}$");
-        private static bool IsValidOrderId(string orderId) => Regex.IsMatch(orderId, @"^\d{5}$");
-        private string EscapeSqlInput(string input) => input.Replace("'", "''");
 
-        public bool IsSelectOnly(string sql)
+        // Helper methods for common tasks
+
+        // In my case, I know my customerId values range from 1 to 30 in the Northwind MySql database, I reject anything else
+        private static int? GetValidCustomerId(string userId)
+        {
+            if (int.TryParse(userId, out int id) && id >= 1 && id <= 30) return id;
+            return null;
+        }
+
+        // In my case, I know my order values range from 1 to 90 in the Northwind MySql database, I reject anything else
+        private static string GetValidOrderId(string orderId)
+        {
+            if (!Regex.IsMatch(orderId, @"^\d{2}$")) throw InvalidOrderIdException();
+            return EscapeSqlInput(orderId);
+        }
+
+        // ****
+        // This a generic way to create a simple ad-hoc select statement with checks on the parameters and that it 
+        // is only using the Select keyword for a read-only query
+        // ****
+        // In your case, you may have more complex queries, more parameters, you can create .customQueries however you'd like
+        // ****
+        private static string GenerateSelectQuery(string tableName, string columnName, object value)
+        {
+            string query = $"SELECT * FROM {tableName} WHERE {columnName} = '{value}'";
+            if (!IsSelectOnly(query)) throw InvalidSqlQueryException();
+            return query;
+        }
+
+        // Custom Exceptions for error handling / checking values
+        private static Exception InvalidCustomerIdException() => new ArgumentException("Invalid CustomerID format. CustomerID must be an integer between 1 and 30.");
+        private static Exception InvalidOrderIdException() => new ArgumentException("Invalid OrderId format. OrderId must be a 2-digit numeric value.");
+        private static Exception InvalidSqlQueryException() => new ArgumentException("Invalid SQL query.");
+        private static bool IsValidOrderId(string orderId) => Regex.IsMatch(orderId, @"^\d{2}$");
+        private static string EscapeSqlInput(string input) => input.Replace("'", "''");
+
+        // ****
+        // This is usig the TransactSql.ScriptDom to parse & check the SQL Statement
+        // ****
+        public static bool IsSelectOnly(string sql)
         {
             TSql150Parser parser = new TSql150Parser(true);
             IList<ParseError> errors;

@@ -1,33 +1,18 @@
 [
   {
     "TABLE_SCHEMA": "dbo",
-    "TABLE_NAME": "All Orders",
-    "COLUMN_NAME": "CustomerID"
+    "TABLE_NAME": "orders",
+    "COLUMN_NAME": "customer_id"
   },
   {
     "TABLE_SCHEMA": "dbo",
-    "TABLE_NAME": "Quarterly Orders",
-    "COLUMN_NAME": "CustomerID"
+    "TABLE_NAME": "customer_orders",
+    "COLUMN_NAME": "customer_id"
   },
   {
     "TABLE_SCHEMA": "dbo",
-    "TABLE_NAME": "All Invoices",
-    "COLUMN_NAME": "CustomerID"
-  },
-  {
-    "TABLE_SCHEMA": "dbo",
-    "TABLE_NAME": "Customers",
-    "COLUMN_NAME": "CustomerID"
-  },
-  {
-    "TABLE_SCHEMA": "dbo",
-    "TABLE_NAME": "Orders",
-    "COLUMN_NAME": "CustomerID"
-  },
-  {
-    "TABLE_SCHEMA": "dbo",
-    "TABLE_NAME": "OrderDetailsEmployee",
-    "COLUMN_NAME": "CustomerID"
+    "TABLE_NAME": "customer_orders_details",
+    "COLUMN_NAME": "customer_id"
   },
   {
     "TABLE_SCHEMA": "dbo",

@@ -30,11 +30,15 @@ namespace RevealSdk.Server.Reveal
             // or you would be passing query parameters for custom queries, etc.
             // ****
 
-            var userId = aspnetContext.Request.Headers["x-header-one"];
+            var userIdString = aspnetContext.Request.Headers["x-header-one"];
             var orderId = aspnetContext.Request.Headers["x-header-two"];
 
-            if (!IsValidCustomerId(userId))
-                throw new ArgumentException("Invalid CustomerID format. CustomerID must be a 5-character alphanumeric string.");
+            if (!int.TryParse(userIdString, out int userId) || !IsValidCustomerId(userId))
+            {
+                throw new ArgumentException("Invalid CustomerID format. CustomerID must be an integer between 1 and 30.");
+            }
+
+            // Proceed with valid userId
 
 
             // ****
@@ -42,7 +46,7 @@ namespace RevealSdk.Server.Reveal
             // your scenario and be dynamically loaded
             // ****
             string role = "User";
-            if (userId == "AROUT" || userId == "BLONP")
+            if (userIdString == "3" || userIdString == "11")
             {
                 role = "Admin";
             }
@@ -54,11 +58,11 @@ namespace RevealSdk.Server.Reveal
                     { "OrderId", orderId },
                     { "Role", role } };
 
-            Console.WriteLine("UserContextProvider: " + userId + " " + orderId);
+            Console.WriteLine("UserContextProvider: " + userIdString + " " + orderId);
 
-            return new RVUserContext(userId, props);
+            return new RVUserContext(userIdString, props);
         }
 
-        private static bool IsValidCustomerId(string customerId) => Regex.IsMatch(customerId, @"^[A-Za-z0-9]{5}$");
+        private static bool IsValidCustomerId(int customerId) => customerId >= 1 && customerId <= 30;
     }
 }

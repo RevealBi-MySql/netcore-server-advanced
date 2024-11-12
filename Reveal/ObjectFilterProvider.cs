@@ -64,7 +64,7 @@ namespace RevealSdk.Server.Reveal
                     // ****
                     // Hardcoding these, however, you can pull these in from JSON, configuration or a database
                     // ****
-                    var allowedItems = new HashSet<string> { "All Orders", "All Invoices"};
+                    var allowedItems = new HashSet<string> { "customer_orders", "customer_orders_details"};
 
                     if ((dataSQLItem.Table != null && !allowedItems.Contains(dataSQLItem.Table)) ||
                         (dataSQLItem.Procedure != null && !allowedItems.Contains(dataSQLItem.Procedure)))
