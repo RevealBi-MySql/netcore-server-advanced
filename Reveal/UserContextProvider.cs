@@ -33,10 +33,20 @@ namespace RevealSdk.Server.Reveal
             var userIdString = aspnetContext.Request.Headers["x-header-one"];
             var orderId = aspnetContext.Request.Headers["x-header-two"];
 
-            if (!int.TryParse(userIdString, out int userId) || !IsValidCustomerId(userId))
+            int userId;
+
+            if (string.IsNullOrEmpty(userIdString) || userIdString == "0")
             {
-                throw new ArgumentException("Invalid CustomerID format. CustomerID must be an integer between 1 and 30.");
+                // this is for testing purposes only to ensure there is a valid userId
+                userId = 3; // Assign the default value, this is an Admin user in the ObjectFilter
             }
+            else if (!int.TryParse(userIdString, out userId) || !IsValidCustomerId(userId))
+            {
+                throw new ArgumentException("Invalid CustomerID format. CustomerID must be a valid integer between 1 and 30.");
+            }
+
+            // At this point, 'userId' will be either the parsed valid ID or the default value of 3.
+            // You can now use the 'userId' variable in the rest of your code.
 
             // Proceed with valid userId
 

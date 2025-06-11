@@ -11,9 +11,9 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.SqlServer.TransactSql.ScriptDom" Version="161.9142.1" />
-    <PackageReference Include="Reveal.Sdk.AspNetCore" Version="1.7.1" />
-    <PackageReference Include="Reveal.Sdk.Data.MySql" Version="1.7.1" />
-    <PackageReference Include="Reveal.Sdk.Dom" Version="0.1.198-beta" />
+    <PackageReference Include="Reveal.Sdk.AspNetCore" Version="1.7.3" />
+    <PackageReference Include="Reveal.Sdk.Data.MySql" Version="1.7.3" />
+    <PackageReference Include="Reveal.Sdk.Dom" Version="0.1.656-beta" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.9.0" />
   </ItemGroup>
 
